@@ -15,6 +15,11 @@ import {
   RemoveSharedGroupMembershipMutationVariables,
 } from 'generated/graphql';
 
+import {
+  Calendar,
+  CalendarEvent,
+  CalendarEventVariant,
+} from 'components/calendar';
 import LoadingSpinner from 'components/display/LoadingSpinner';
 import Tooltip from 'components/display/Tooltip';
 import AccentButton from 'components/input/Button';
@@ -25,6 +30,7 @@ import {
   REMOVE_SHARED_GROUP_MEMBERSHIP,
 } from 'graphql/mutations/SharedClasses';
 import { getKittenFromID } from 'utils/Kitten';
+import { weekDayLetters } from 'utils/Misc';
 
 import {
   fetchGroup,
@@ -84,6 +90,46 @@ const componentTint = (sectionName: string) => {
   if (kind.startsWith('LAB')) return 'bg-lab text-dark1';
   if (kind.startsWith('TUT')) return 'bg-tutorial text-dark1';
   return 'bg-light2 text-dark2';
+};
+
+const sectionVariant = (sectionName: string): CalendarEventVariant => {
+  const kind = sectionName.trim().split(/\s+/)[0].toUpperCase();
+  if (kind.startsWith('LEC')) return 'lecture';
+  if (kind.startsWith('LAB')) return 'lab';
+  if (kind.startsWith('TUT')) return 'tutorial';
+  return 'other';
+};
+
+// Monday to Friday only; class meetings on weekends are vanishingly rare and
+// are dropped rather than adding two mostly-empty columns.
+const CALENDAR_DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
+
+// Flatten shared classes into calendar blocks: one per meeting per weekday it
+// runs on. days come as tokens matching weekDayLetters (M, T, W, Th, F).
+const toCalendarEvents = (classes: SharedClass[]): CalendarEvent[] => {
+  const events: CalendarEvent[] = [];
+  classes.forEach((c) => {
+    const variant = sectionVariant(c.section_name);
+    c.meetings.forEach((m, mi) => {
+      const { start_seconds: startSeconds, end_seconds: endSeconds } = m;
+      if (startSeconds === null || endSeconds === null) return;
+      m.days.forEach((day) => {
+        const dayIndex = weekDayLetters.indexOf(day);
+        if (dayIndex < 0 || dayIndex > 4) return;
+        events.push({
+          id: `${c.section_id}-${mi}-${day}`,
+          dayIndex,
+          startMinutes: Math.round(startSeconds / 60),
+          endMinutes: Math.round(endSeconds / 60),
+          variant,
+          title: c.course_code.toUpperCase(),
+          subtitle: c.section_name,
+          location: m.location ?? undefined,
+        });
+      });
+    });
+  });
+  return events;
 };
 
 const SharedClassCard = ({
@@ -227,6 +273,14 @@ const GroupDetail = ({ groupId, onBack, onChanged }: Props) => {
   const pending = group.members.filter((m) => m.status === 'pending');
   const membersById = new Map(group.members.map((m) => [m.user_id, m]));
 
+  const events = toCalendarEvents(group.shared_classes);
+  const eventHours = events.flatMap((e) => [
+    e.startMinutes / 60,
+    e.endMinutes / 60,
+  ]);
+  const minHour = eventHours.length ? Math.floor(Math.min(...eventHours)) : 8;
+  const maxHour = eventHours.length ? Math.ceil(Math.max(...eventHours)) : 18;
+
   return (
     <div className="flex flex-col gap-lg">
       <button
@@ -339,21 +393,35 @@ const GroupDetail = ({ groupId, onBack, onChanged }: Props) => {
             section, it shows up here.
           </div>
         ) : (
-          <ul className="flex flex-col gap-sm">
-            {group.shared_classes.map((shared) => {
-              const sharedMembers = shared.member_ids.flatMap((memberId) => {
-                const member = membersById.get(memberId);
-                return member ? [member] : [];
-              });
-              return (
-                <SharedClassCard
-                  key={shared.section_id}
-                  shared={shared}
-                  members={sharedMembers}
+          <>
+            {events.length > 0 && (
+              <div className="rounded-card border border-light3 bg-white p-md shadow-box">
+                <Calendar
+                  dayLabels={CALENDAR_DAYS}
+                  events={events}
+                  minHour={minHour}
+                  maxHour={maxHour}
+                  interactive={false}
+                  showHeader={false}
                 />
-              );
-            })}
-          </ul>
+              </div>
+            )}
+            <ul className="flex flex-col gap-sm">
+              {group.shared_classes.map((shared) => {
+                const sharedMembers = shared.member_ids.flatMap((memberId) => {
+                  const member = membersById.get(memberId);
+                  return member ? [member] : [];
+                });
+                return (
+                  <SharedClassCard
+                    key={shared.section_id}
+                    shared={shared}
+                    members={sharedMembers}
+                  />
+                );
+              })}
+            </ul>
+          </>
         )}
       </div>
     </div>

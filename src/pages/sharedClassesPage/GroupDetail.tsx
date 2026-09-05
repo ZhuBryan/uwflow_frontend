@@ -32,10 +32,7 @@ interface Props {
   onChanged: () => void;
 }
 
-// Matches the avatar shown elsewhere in the app (navbar, reviews, profile
-// header): a kitten placeholder keyed off the user's id. Group members only
-// carry an id and name here, not a picture_url, so unlike those call sites
-// this always renders the kitten rather than a real photo.
+// Same kitten-avatar pattern as navbar/reviews/profile; members have no picture_url.
 const Avatar = ({
   userId,
   name,
@@ -67,8 +64,7 @@ const MemberChip = ({ member }: { member: GroupMember }) => {
   );
 };
 
-// LEC / LAB / TUT drives a colored pill using the same section colors the
-// schedule calendar uses. Anything else falls back to a neutral chip.
+// LEC/LAB/TUT get the calendar's section colors; everything else is neutral.
 const componentTint = (sectionName: string) => {
   const kind = sectionName.trim().split(/\s+/)[0].toUpperCase();
   if (kind.startsWith('LEC')) return 'bg-lecture text-dark1';

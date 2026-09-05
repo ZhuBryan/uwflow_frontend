@@ -146,9 +146,7 @@ const SharedClassesPage = () => {
     };
   }, [history, isLoggedIn, location.pathname, location.search, refetch]);
 
-  // First logged-in visit to this browser: walk through the short tour once.
-  // Any dismissal (Skip, X, backdrop, or Done) persists the flag so it never
-  // shows again.
+  // First logged-in visit only; dismissing the tour persists the flag.
   useEffect(() => {
     if (isLoggedIn && !localStorage.getItem(TOUR_DISMISSED_KEY)) {
       openModal(SHARED_CLASSES_TOUR_MODAL, {
